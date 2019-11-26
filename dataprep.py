@@ -1,15 +1,8 @@
-import bisect
-import hashlib
 import random
 import os
 from datetime import datetime
 import apache_beam as beam
-import shutil
 from typing import Any, Dict, List, Text
-from apache_beam.options.pipeline_options import PipelineOptions
-from google.cloud import bigquery
-import tensorflow as tf
-
 
 PROJECT_ID = 'skyuk-uk-decis-models-01-dev'
 REGION = 'europe-west1'
@@ -141,16 +134,6 @@ def GenerateExamplesByBeam(pipeline, query):
 
     example_splits['train'] = undersampled_train
 
-#     serialized_train = (example_splits['train']
-#         | 'ToSerializedTFTrain' >> _InputToSerializedExample(
-#           input_to_example,
-#           query))
-
-#     serialized_test = (example_splits['test']
-#         | 'ToSerializedTFTest' >> _InputToSerializedExample(
-#           input_to_example,
-#           query))
-
     return example_splits
 
 
@@ -194,6 +177,3 @@ def main():
     
 if __name__ == "__main__":
     main()
-    
-
-
