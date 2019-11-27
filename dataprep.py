@@ -14,18 +14,25 @@ MAX_INT64 = '0x7FFFFFFFFFFFFFFF'
 
 
 @beam.ptransform_fn
-def _ReadFromBigQuery(pipeline, query):
-    """Simple pipeline to read the table from BigQuery via the specified query"""
+@beam.typehints.with_input_types(beam.Pipeline)
+@beam.typehints.with_output_types(beam.typehints.Dict[Text, Any])
+def _ReadFromBigQuery(
+        pipeline: beam.Pipeline, query: Text) -> beam.pvalue.PCollection:
+    """Simple pipeline to read the table from BigQuery via the specified
+    query
+    """
     return (
         pipeline | 'QueryTable' >> beam.io.Read(beam.io.BigQuerySource(
             query=query, use_standard_sql=True)))
 
 
 @beam.ptransform_fn
-def _SplitData(pcoll, test=0.3):
-    """Pipeline to split the input bigquery query into two PCollections: train and test.
-    The train and test ratio is passed in as explicit side inputs, the output is a tuple of the
-    two corresponding PCollections
+@beam.typehints.with_input_types(beam.Pipeline)
+@beam.typehints.with_output_types(beam.typehints.Dict[Text, beam.pvalue.PCollection])
+def _SplitData(pcoll: beam.Pipeline, test: int = 0.3):
+    """Pipeline to split the input bigquery query into two PCollections: train
+    and test. The train and test ratio is passed in as explicit side inputs,
+    the output is a tuple of the two corresponding PCollections
     """
     if test < 0 or test > 1:
         raise ValueError('Invalid test size')
@@ -52,11 +59,11 @@ def _SplitData(pcoll, test=0.3):
 @beam.ptransform_fn
 def _SeperateAndUndersample(pcoll, want_ratio=0.1):
     """Undersample the majority class"""
-        
     percentage = (pcoll
         | 'ReduceToClass' >> beam.Map(lambda x: 1.0 * x['Target'])
-        | beam.CombineGlobally(beam.combiners.MeanCombineFn()))
-    
+        | beam.CombineGlobally(beam.combiners.MeanCombineFn())
+        )
+
     class _Seperate(beam.DoFn):
         """DoFn that seperates positive from negative"""
         def process(self, element):
