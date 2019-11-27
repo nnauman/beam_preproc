@@ -27,9 +27,9 @@ def _ReadFromBigQuery(
 
 
 @beam.ptransform_fn
-@beam.typehints.with_input_types(beam.Pipeline)
+@beam.typehints.with_input_types(beam.pvalue.PCollection)
 @beam.typehints.with_output_types(beam.typehints.Dict[Text, beam.pvalue.PCollection])
-def _SplitData(pcoll: beam.Pipeline, test: int = 0.3):
+def _SplitData(pcoll: beam.pvalue.PCollection, test: int = 0.3):
     """Pipeline to split the input bigquery query into two PCollections: train
     and test. The train and test ratio is passed in as explicit side inputs,
     the output is a tuple of the two corresponding PCollections
@@ -57,7 +57,9 @@ def _SplitData(pcoll: beam.Pipeline, test: int = 0.3):
 
 
 @beam.ptransform_fn
-def _SeperateAndUndersample(pcoll, want_ratio=0.1):
+@beam.typehints.with_input_types(beam.pvalue.PCollection)
+@beam.typehints.with_output_types(beam.pvalue.PCollection)
+def _SeperateAndUndersample(pcoll: beam.pvalue.PCollection, want_ratio: int = 0.1):
     """Undersample the majority class"""
     percentage = (pcoll
         | 'ReduceToClass' >> beam.Map(lambda x: 1.0 * x['Target'])
@@ -102,6 +104,8 @@ def _SeperateAndUndersample(pcoll, want_ratio=0.1):
 
 
 @beam.ptransform_fn
+@beam.typehints.with_input_types(beam.pvalue.PCollection)
+@beam.typehints.with_output_types(beam.pvalue.PCollection)
 def _WriteSplit(example_split, split_name):
 
     table_schema = {'fields' : [
@@ -125,7 +129,8 @@ def _WriteSplit(example_split, split_name):
         )
 
 
-def GenerateExamplesByBeam(pipeline, query):
+def GenerateExamplesByBeam(
+        pipeline: beam.Pipeline, query: Text) -> Dict[Text, beam.pvalue.PCollection]:
     """
     Reads, splits, oversamples, and serializes the input.
     """
