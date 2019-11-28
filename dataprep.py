@@ -28,8 +28,11 @@ def _ReadFromBigQuery(
 
 @beam.ptransform_fn
 @beam.typehints.with_input_types(beam.pvalue.PCollection)
-@beam.typehints.with_output_types(beam.typehints.Dict[Text, beam.pvalue.PCollection])
-def _SplitData(pcoll: beam.pvalue.PCollection, test: int = 0.3):
+@beam.typehints.with_output_types(
+    beam.typehints.Dict[Text, beam.pvalue.PCollection])
+def _SplitData(
+        pcoll: beam.pvalue.PCollection,
+        test: int = 0.3) -> Dict[Text, beam.pvalue.PCollection]:
     """Pipeline to split the input bigquery query into two PCollections: train
     and test. The train and test ratio is passed in as explicit side inputs,
     the output is a tuple of the two corresponding PCollections
@@ -59,12 +62,13 @@ def _SplitData(pcoll: beam.pvalue.PCollection, test: int = 0.3):
 @beam.ptransform_fn
 @beam.typehints.with_input_types(beam.pvalue.PCollection)
 @beam.typehints.with_output_types(beam.pvalue.PCollection)
-def _SeperateAndUndersample(pcoll: beam.pvalue.PCollection, want_ratio: int = 0.1):
+def _SeperateAndUndersample(
+        pcoll: beam.pvalue.PCollection,
+        want_ratio: int = 0.1) -> beam.pvalue.PCollection:
     """Undersample the majority class"""
     percentage = (pcoll
-        | 'ReduceToClass' >> beam.Map(lambda x: 1.0 * x['Target'])
-        | beam.CombineGlobally(beam.combiners.MeanCombineFn())
-        )
+                  | 'ReduceToClass' >> beam.Map(lambda x: 1.0 * x['Target'])
+                  | beam.CombineGlobally(beam.combiners.MeanCombineFn()))
 
     class _Seperate(beam.DoFn):
         """DoFn that seperates positive from negative"""
@@ -86,29 +90,31 @@ def _SeperateAndUndersample(pcoll: beam.pvalue.PCollection, want_ratio: int = 0.
                 return
             
     seperate = (pcoll
-            | 'SeperateData' >> beam.ParDo(_Seperate()).with_outputs(
-                'majority',
-                'minority'))
+                | 'SeperateData' >> beam.ParDo(_Seperate()).with_outputs(
+                  'majority',
+                  'minority'))
     
     majority, minority = seperate['majority'], seperate['minority']
     
     undersampled_majority = (majority
-            | 'UndersampleMajority' >> beam.ParDo(
-                _Undersample(),
-                orig_ratio=beam.pvalue.AsSingleton(percentage)))
+                             | 'UndersampleMajority' >> beam.ParDo(
+                               _Undersample(),
+                               orig_ratio=beam.pvalue.AsSingleton(percentage)))
     
     merged = ((undersampled_majority, minority)
-            | 'MergePCollections' >> beam.Flatten())
+              | 'MergePCollections' >> beam.Flatten())
     
     return merged
 
 
 @beam.ptransform_fn
 @beam.typehints.with_input_types(beam.pvalue.PCollection)
-@beam.typehints.with_output_types(beam.pvalue.PCollection)
-def _WriteSplit(example_split, split_name):
+@beam.typehints.with_output_types(beam.pvalue.PDone)
+def _WriteSplit(
+        example_split: beam.pvalue.PCollection,
+        split_name: Text) -> beam.pvalue.PDone:
 
-    table_schema = {'fields' : [
+    table_schema = {'fields': [
         {'name': 'h_age_fine', 'type': 'STRING', 'mode': 'NULLABLE'},
         {'name': 'DTV_contract_segment', 'type': 'STRING', 'mode': 'NULLABLE'},
         {'name': 'SGE_Active', 'type': 'INTEGER', 'mode': 'NULLABLE'},
@@ -116,33 +122,32 @@ def _WriteSplit(example_split, split_name):
         {'name': 'rand_num', 'type': 'FLOAT', 'mode': 'NULLABLE'}
     ]}
 
-    table_spec = '{}:{}.NNM01_beam_{}'.format(PROJECT_ID, DATASET_NAME, split_name)
+    table_spec = '{}:{}.NNM01_beam_{}'.format(
+        PROJECT_ID, DATASET_NAME, split_name)
 
     return (example_split
-        | 'Shuffle' >> beam.transforms.Reshuffle()
-        | 'Write' >> beam.io.WriteToBigQuery(
-            table_spec,
-            schema = table_schema,
-            write_disposition=beam.io.BigQueryDisposition.WRITE_TRUNCATE,
-            create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED
-            )
-        )
+            | 'Shuffle' >> beam.transforms.Reshuffle()
+            | 'Write' >> beam.io.WriteToBigQuery(
+                table_spec,
+                schema=table_schema,
+                write_disposition=beam.io.BigQueryDisposition.WRITE_TRUNCATE,
+                create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))  # noqa: E501
 
 
 def GenerateExamplesByBeam(
-        pipeline: beam.Pipeline, query: Text) -> Dict[Text, beam.pvalue.PCollection]:
+        pipeline: beam.Pipeline, query: Text) -> Dict[Text, beam.pvalue.PCollection]:  # noqa: E501
     """
     Reads, splits, oversamples, and serializes the input.
     """
 
     example_splits = (pipeline
-        | 'ReadFromBigQuery' >> _ReadFromBigQuery(query)
-        | 'SplitData' >> _SplitData())
+                      | 'ReadFromBigQuery' >> _ReadFromBigQuery(query)
+                      | 'SplitData' >> _SplitData())
 
     train = example_splits['train']
 
     undersampled_train = (train
-        | 'UndersampleTrain' >> _SeperateAndUndersample())
+                          | 'UndersampleTrain' >> _SeperateAndUndersample())
 
     example_splits['train'] = undersampled_train
 
@@ -160,10 +165,10 @@ def main():
         WHERE (ABS(FARM_FINGERPRINT(account_number)) / {max_int64})
         < {query_sample_rate}
     """.format(project=PROJECT_ID,
-            dataset=DATASET_NAME,
-            table=TABLE_NAME,
-            max_int64=MAX_INT64,
-            query_sample_rate=QUERY_SAMPLE_RATE)
+               dataset=DATASET_NAME,
+               table=TABLE_NAME,
+               max_int64=MAX_INT64,
+               query_sample_rate=QUERY_SAMPLE_RATE)
     
     options = {
         "staging_location": os.path.join(OUTPUT_DIR, "tmp", "staging"),
@@ -178,14 +183,13 @@ def main():
 
     pipeline_options = beam.pipeline.PipelineOptions(flags=[], **options)
     
-    
     with beam.Pipeline('DirectRunner', options=pipeline_options) as p:
 
         example_splits = GenerateExamplesByBeam(p, query)
 
         for k, v in example_splits.items():
             _ = (v | k >> _WriteSplit(k))
-    
-    
+
+
 if __name__ == "__main__":
     main()
