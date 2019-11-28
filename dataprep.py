@@ -39,19 +39,19 @@ def _SplitData(
     """
     if test < 0 or test > 1:
         raise ValueError('Invalid test size')
-    
+
     class _Split(beam.DoFn):
         def process(self, element):
             if element['rand_num'] < test:
                 yield beam.pvalue.TaggedOutput('test', element)
             else:
                 yield beam.pvalue.TaggedOutput('train', element)
-        
+
     split = (
         pcoll | 'Split' >> beam.ParDo(_Split()).with_outputs(
             'train',
             'test'))
-    
+
     result = {}
     result['train'] = split['train']
     result['test'] = split['test']
@@ -77,33 +77,33 @@ def _SeperateAndUndersample(
                 yield beam.pvalue.TaggedOutput('minority', element)
             else:
                 yield beam.pvalue.TaggedOutput('majority', element)
-                
+
     class _Undersample(beam.DoFn):
         """DoFn that undersamples the input pcollection"""
         def process(self, element, orig_ratio):
             sample_ratio = orig_ratio/want_ratio
             r = random.random()
-            
+
             if r <= sample_ratio:
                 yield element
             else:
                 return
-            
+
     seperate = (pcoll
                 | 'SeperateData' >> beam.ParDo(_Seperate()).with_outputs(
                   'majority',
                   'minority'))
-    
+
     majority, minority = seperate['majority'], seperate['minority']
-    
+
     undersampled_majority = (majority
                              | 'UndersampleMajority' >> beam.ParDo(
                                _Undersample(),
                                orig_ratio=beam.pvalue.AsSingleton(percentage)))
-    
+
     merged = ((undersampled_majority, minority)
               | 'MergePCollections' >> beam.Flatten())
-    
+
     return merged
 
 
@@ -114,13 +114,15 @@ def _WriteSplit(
         example_split: beam.pvalue.PCollection,
         split_name: Text) -> beam.pvalue.PDone:
 
-    table_schema = {'fields': [
-        {'name': 'h_age_fine', 'type': 'STRING', 'mode': 'NULLABLE'},
-        {'name': 'DTV_contract_segment', 'type': 'STRING', 'mode': 'NULLABLE'},
-        {'name': 'SGE_Active', 'type': 'INTEGER', 'mode': 'NULLABLE'},
-        {'name': 'Target', 'type': 'INTEGER', 'mode': 'NULLABLE'},
-        {'name': 'rand_num', 'type': 'FLOAT', 'mode': 'NULLABLE'}
-    ]}
+    # NOTE: Currently automatically inferring schema.
+    # Are there any potential issues with this?
+    # table_schema = {'fields': [
+    #     {'name': 'h_age_fine', 'type': 'STRING', 'mode': 'NULLABLE'},
+    #     {'name': 'DTV_contract_segment', 'type': 'STRING', 'mode': 'NULLABLE'},  # noqa: E501
+    #     {'name': 'SGE_Active', 'type': 'INTEGER', 'mode': 'NULLABLE'},
+    #     {'name': 'Target', 'type': 'INTEGER', 'mode': 'NULLABLE'},
+    #     {'name': 'rand_num', 'type': 'FLOAT', 'mode': 'NULLABLE'}
+    # ]}
 
     table_spec = '{}:{}.NNM01_beam_{}'.format(
         PROJECT_ID, DATASET_NAME, split_name)
@@ -168,11 +170,12 @@ def main():
                table=TABLE_NAME,
                max_int64=MAX_INT64,
                query_sample_rate=QUERY_SAMPLE_RATE)
-    
+
     options = {
         "staging_location": os.path.join(OUTPUT_DIR, "tmp", "staging"),
         "temp_location": os.path.join(OUTPUT_DIR, "tmp"),
-        "job_name": 'local_job_{}'.format(datetime.now().strftime('%Y%m%d%H%M%S')),
+        "job_name": 'local_job_{}'.format(
+            datetime.now().strftime('%Y%m%d%H%M%S')),
         "project": PROJECT_ID,
         "teardown_policy": "TEARDOWN_ALWAYS",
         "save_main_session": False,
@@ -181,7 +184,7 @@ def main():
     }
 
     pipeline_options = beam.pipeline.PipelineOptions(flags=[], **options)
-    
+
     with beam.Pipeline('DirectRunner', options=pipeline_options) as p:
 
         example_splits = GenerateExamplesByBeam(p, query)
