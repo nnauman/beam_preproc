@@ -129,7 +129,6 @@ def _WriteSplit(
             | 'Shuffle' >> beam.transforms.Reshuffle()
             | 'Write' >> beam.io.WriteToBigQuery(
                 table_spec,
-                schema=table_schema,
                 write_disposition=beam.io.BigQueryDisposition.WRITE_TRUNCATE,
                 create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED))  # noqa: E501
 
